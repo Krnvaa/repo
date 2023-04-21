@@ -1,21 +1,27 @@
 ﻿#include <iostream>
-#include <cassert>     
+#include <cassert>    
+#include <string> 
 
 using namespace std;
-
+struct Transformer;
+struct Number;
+struct BinaryOperation;
+struct FunctionCall;
+struct Variable;
 struct Expression //базовая абстрактная структура
 {
 	virtual ~Expression() { } //виртуальный деструктор
 	virtual double evaluate() const = 0; //абстрактный метод «вычислить»
-	virtual Expression * transform(Transformer *tr) const = 0;
+	virtual Expression * transform(Transformer* tr) const = 0;
+	virtual std::string print() const = 0;
 };
 struct Transformer
 {
 	virtual ~Transformer() {}
-	virtual Expression *transformNumber(Number const *) = 0;
-	virtual Expression *transformBinaryOperation(BinaryOperation const *) = 0;
-	virtual Expression *transformFunctionCall(FunctionCall const *) = 0;
-	virtual Expression *transformVariable(Variable const *) = 0;
+	virtual Expression* transformNumber(Number const*) = 0;
+	virtual Expression* transformBinaryOperation(BinaryOperation const*) = 0;
+	virtual Expression* transformFunctionCall(FunctionCall const*) = 0;
+	virtual Expression* transformVariable(Variable const*) = 0;
 };
 struct Number : Expression // стуктура «Число»
 {
@@ -26,6 +32,9 @@ struct Number : Expression // стуктура «Число»
 	Expression * transform(Transformer *tr) const
 	{
 		return tr->transformNumber(this);
+	}
+	std::string print() const {
+		return std::to_string(this->value_);
 	}
 private:
 	double value_; // само вещественное число
@@ -68,6 +77,9 @@ struct BinaryOperation : Expression // «Бинарная операция»
 	{
 		return tr->transformBinaryOperation(this);
 	}
+	std::string print() const {
+		return this->left_->print() + std::string(1, this->op_) + this->right_->print();
+	}
 private:
 	Expression const *left_; // указатель на левый операнд
 	Expression const *right_; // указатель на правый операнд
@@ -102,6 +114,9 @@ struct FunctionCall : Expression // структура «Вызов функци
 	{
 		return tr->transformFunctionCall(this);
 	}
+	std::string print() const {
+		return this->name_ + "(" + this->arg_->print() + ")";
+	}
 private:
 	std::string const name_; // имя функции
 	Expression const *arg_; // указатель на ее аргумент
@@ -119,8 +134,37 @@ struct Variable : Expression // структура «Переменная»
 	{
 		return tr->transformVariable(this);
 	}
+	std::string print() const {
+		return this->name_;
+	}
 private:
 	std::string const name_; // имя переменной
+};struct CopySyntaxTree : Transformer
+{
+	Expression *transformNumber(Number const *number)
+	{
+		Expression * exp = new Number(number->value());
+		return exp;
+	}
+	Expression *transformBinaryOperation(BinaryOperation const *binop)
+	{
+		Expression * exp = new BinaryOperation((binop->left())->transform(this),
+			binop->operation(),
+			(binop->right())->transform(this));
+		return exp;
+	}
+	Expression *transformFunctionCall(FunctionCall const *fcall)
+	{
+		Expression * exp = new FunctionCall(fcall->name(),
+			(fcall->arg())->transform(this));
+		return exp;
+	}
+	Expression *transformVariable(Variable const *var)
+	{
+		Expression *exp = new Variable(var->name());
+		return exp;
+	}
+	~CopySyntaxTree() { };
 };
 
 int main()
@@ -140,7 +184,17 @@ int main()
 	Expression* callAbs = new FunctionCall("abs", mult);
 	cout << callAbs->evaluate() << endl;
 	//------------------------------------------------------------------------------	*/
-
+	Number* n32 = new Number(32.0);
+	Number* n16 = new Number(16.0);
+	BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+	FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+	Variable* var = new Variable("var");
+	BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL,
+		callSqrt);
+	FunctionCall* callAbs = new FunctionCall("abs", mult);
+	CopySyntaxTree CST;
+	Expression* newExpr = callAbs->transform(&CST);
+	std::cout << callAbs->transform(&CST)->print() << std::endl;	
 }
 
 
