@@ -139,7 +139,8 @@ struct Variable : Expression // структура «Переменная»
 	}
 private:
 	std::string const name_; // имя переменной
-};struct CopySyntaxTree : Transformer
+};
+struct CopySyntaxTree : Transformer
 {
 	Expression *transformNumber(Number const *number)
 	{
@@ -165,7 +166,70 @@ private:
 		return exp;
 	}
 	~CopySyntaxTree() { };
-};
+};
+struct FoldConstants : Transformer
+{
+	Expression *transformNumber(Number const *number)
+	{
+		Expression * exp = new Number(number->value());
+		return exp;
+	}
+	Expression *transformBinaryOperation(BinaryOperation const *binop)
+	{
+		// 1. Создаем указатели на левое и правое выражение
+		Expression * nleft = (binop->left())->transform(this);
+		Expression * nright = (binop->right())->transform(this);
+		int noperation = binop->operation();
+
+		// 2. Создаем новый объект типа BinaryOperation с новыми указателями
+		BinaryOperation * nbinop = new BinaryOperation(nleft, noperation, nright);
+		// 3. Проверяем на приводимость указателей к типу Number
+		Number * nleft_is_number = dynamic_cast<Number *>(nleft);
+		Number * nright_is_number = dynamic_cast<Number *>(nright);
+		if (nleft_is_number && nright_is_number) {
+			// 3.1 Вычисляем значение выражения
+			Expression * result = new Number(binop->evaluate());
+			// 3.2 Освобождаем память
+			delete nbinop;
+			// 3.3 Возвращаем результат
+			return result;
+		}
+		else {
+			return nbinop;
+		}
+
+	}
+	Expression *transformFunctionCall(FunctionCall const *fcall)
+	{
+		// 1. Создаем указатель на аргумент
+		Expression * arg = (fcall->arg())->transform(this);
+		std::string const & nname = fcall->name();
+
+		// 2. Создаем новый объект типа FunctionCall с новым указателем
+		FunctionCall * nfcall = new FunctionCall(nname, arg);
+
+		// 3. Проверяем на приводимость указателя к типу Number
+		Number * arg_is_number = dynamic_cast<Number *>(arg);
+		if (arg_is_number) {
+			// 3.1 Вычисляем значение выражения
+			Expression * result = new Number(fcall->evaluate());
+			// 3.2 Освобождаем память
+			delete nfcall;
+			// 3.3 Возвращаем результат
+			return result;
+		}
+		else {
+			return nfcall;
+		}
+	}
+	Expression *transformVariable(Variable const *var)
+	{
+		Expression *exp = new Variable(var->name());
+		return exp;
+	}
+	~FoldConstants() { };
+};
+
 
 int main()
 {   /*
@@ -183,7 +247,8 @@ int main()
 	Expression* mult = new BinaryOperation(n2, BinaryOperation::MUL, callSqrt);
 	Expression* callAbs = new FunctionCall("abs", mult);
 	cout << callAbs->evaluate() << endl;
-	//------------------------------------------------------------------------------	*/
+	//------------------------------------------------------------------------------
+	*/
 	Number* n32 = new Number(32.0);
 	Number* n16 = new Number(16.0);
 	BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
@@ -194,7 +259,11 @@ int main()
 	FunctionCall* callAbs = new FunctionCall("abs", mult);
 	CopySyntaxTree CST;
 	Expression* newExpr = callAbs->transform(&CST);
-	std::cout << callAbs->transform(&CST)->print() << std::endl;	
+	std::cout << newExpr->print() << std::endl;
+
+	FoldConstants FC;
+	Expression* newExpr2 = callAbs->transform(&FC);	std::cout << newExpr2->print() << std::endl;
+	
 }
 
 
